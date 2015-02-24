@@ -1,11 +1,11 @@
 <?
-
 namespace mrssoft\subscribe\models;
 
 use yii\db\ActiveRecord;
 
 /**
  * @property string $email
+ * @property string $name
  * @property int $public
  * @property int $id
  */

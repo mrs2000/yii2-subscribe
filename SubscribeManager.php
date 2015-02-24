@@ -5,6 +5,7 @@ use mrssoft\subscribe\models\Progress;
 use mrssoft\subscribe\models\Recipient;
 use mrssoft\subscribe\models\Subscribe;
 use yii\base\Component;
+use yii\base\ErrorException;
 use yii\base\Event;
 use yii\helpers\ArrayHelper;
 
@@ -17,37 +18,54 @@ class SubscribeManager extends Component
      * @param $title
      * @param $text
      * @param null $key
+     * @param array $recipients
+     * @return bool
+     * @throws ErrorException
      */
-    public function create($title, $text, $key = null)
+    public function create($title, $text, $recipients = [], $key = null)
     {
         if ($key === null) $key = $title;
         $key = md5($key);
 
-        if (Subscribe::find()->where(['key' => $key])->one()) return;
+        if (Subscribe::find()->where(['key' => $key])->one()) return false;
 
         $subscribe = new Subscribe();
         $subscribe->key = $key;
         $subscribe->text = $text;
         $subscribe->title = $title;
         if ($subscribe->save()) {
-            foreach ($this->getRecipients() as $email) {
+
+            if (empty($recipients)) {
+                $recipients = $this->getRecipients();
+            }
+
+            $recipients = array_unique($recipients);
+
+            foreach ($recipients as $name => $email) {
                 $progress = new Progress();
                 $progress->email = $email;
+                $progress->name = is_numeric($name) ? null : $name;
                 $progress->subscribe_id = $subscribe->id;
                 $progress->save();
             }
+            return true;
+        } else {
+            throw new ErrorException('Error create subscribe.', 500);
         }
     }
 
     /**
      * Add new recipient
      * @param $email
+     * @param null $name
+     * @return bool
      */
-    public function addRecipient($email)
+    public function addRecipient($email, $name = null)
     {
         $recipient = new Recipient();
         $recipient->email = $email;
-        $recipient->save();
+        $recipient->name = $name;
+        return $recipient->save();
     }
 
     /**
@@ -65,5 +83,32 @@ class SubscribeManager extends Component
         } else {
             return $event->data['recipients'];
         }
+    }
+
+    /**
+     * @param $email
+     * @return string
+     */
+    public static function encodeEmail($email)
+    {
+        $result = '';
+        for ($i = 0; $i < strlen($email); $i++) {
+            $result .= dechex(ord(substr($email, $i, 1)));
+        }
+        return rawurlencode($result);
+    }
+
+    /**
+     * @param $key
+     * @return string
+     */
+    public static function decodeEmail($key)
+    {
+        $key = rawurldecode($key);
+        $result = '';
+        for ($i = 0; $i < strlen($key); $i += 2) {
+            $result .= chr(hexdec(substr($key, $i, 2)));
+        }
+        return $result;
     }
 }
